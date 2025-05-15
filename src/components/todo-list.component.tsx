@@ -14,6 +14,10 @@ interface FetchTodosParams {
   setError: React.Dispatch<React.SetStateAction<string | null>>;
 }
 
+type FetchError = {
+  message: string;
+};
+
 /**
  * fetchTodos function fetches todos from the API and updates the state.
  * @param setTodos - React setState Function to set the todos state.
@@ -29,15 +33,27 @@ interface FetchTodosParams {
  */
 // remove eslint-disable-next-line @typescript-eslint/no-unused-vars when you use the parameters in the function
 export const fetchTodos = async ({
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   setTodos,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   setFilteredTodos,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   setLoading,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   setError,
-}: FetchTodosParams): Promise<void> => {};
+}: FetchTodosParams): Promise<void> => {
+  setLoading(true);
+  try {
+    const response = await fetch('https://jsonplaceholder.typicode.com/todos');
+    if (!response.ok) {
+      setError(`HTTP error! Status: ${response.status}`);
+    }
+    const data: Todo[] = await response.json();
+    setTodos(data);
+    setFilteredTodos(data);
+  } catch (error) {
+    const fetchError = error as FetchError;
+    setError(fetchError.message);
+  } finally {
+    setLoading(false);
+  }
+};
 /**
  * TodoList component fetches todos from the API and displays them in a list.
  * It also provides filter buttons to filter the todos based on their completion status.
@@ -49,23 +65,40 @@ export const fetchTodos = async ({
 
 export const TodoList: React.FC<TodoListProps> = ({ onSelectTodo }) => {
   const [todos, setTodos] = React.useState<Todo[]>([]);
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [loading, setLoading] = React.useState<boolean>(true);
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [error, setError] = React.useState<string | null>(null);
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [filteredTodos, setFilteredTodos] = React.useState<Todo[]>([]);
+  const [filter, setFilter] = React.useState<'All' | 'Open' | 'Completed'>('All');
 
   React.useEffect(() => {
-    async function callTodo() {
-      const res = await fetch('https://jsonplaceholder.typicode.com/todos');
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data: Todo[] = await res.json();
-      setTodos(data);
-    }
-
-    callTodo();
+    const fetchData = async () => {
+      await fetchTodos({
+        setTodos,
+        setFilteredTodos,
+        setLoading,
+        setError,
+      });
+    };
+    fetchData();
   }, []);
+
+  if (loading) {
+    return <div>Loading todos</div>;
+  }
+  if (error) {
+    return <div>Error loading todos</div>;
+  }
+
+  const handleFilter = (newFilter: 'All' | 'Open' | 'Completed') => {
+    setFilter(newFilter);
+    if (newFilter === 'All') {
+      setFilteredTodos(todos);
+    } else if (newFilter === 'Open') {
+      setFilteredTodos(todos.filter((t) => !t.completed));
+    } else {
+      setFilteredTodos(todos.filter((t) => t.completed));
+    }
+  };
 
   return (
     <div className="todo-list">
@@ -79,27 +112,53 @@ export const TodoList: React.FC<TodoListProps> = ({ onSelectTodo }) => {
         <code> .todo-button.completed</code> CSS style in App.css
       </p>
       <div className="filter-buttons">
-        <button data-testid="filter-all">All</button>
-        <button data-testid="filter-open">Open</button>
-        <button data-testid="filter-completed">Completed</button>
+        <button
+          data-testid="filter-all"
+          className={filter === 'All' ? 'active' : ''}
+          onClick={() => handleFilter('All')}
+        >
+          All
+        </button>
+        <button
+          data-testid="filter-open"
+          className={filter === 'Open' ? 'active' : ''}
+          onClick={() => handleFilter('Open')}
+        >
+          Open
+        </button>
+        <button
+          data-testid="filter-completed"
+          className={filter === 'Completed' ? 'active' : ''}
+          onClick={() => handleFilter('Completed')}
+        >
+          Completed
+        </button>
       </div>
       <p>
         Show a list of todo&apos;s here. Make it so if you click a todo it calls the event
         handler onSelectTodo with the todo id to show the individual todo
       </p>
       <ul>
-        {todos.map((todo) => (
-          <li
-            key={todo.id}
-            data-testid={`todo-${todo.id}`}
-            onClick={() => onSelectTodo(todo.id)}
-            style={{
-              cursor: 'pointer',
-              textDecoration: todo.completed ? 'line-through' : 'none',
-              marginBottom: '4px',
-            }}
-          >
-            {todo.title}
+        {filteredTodos.length === 0 && <p>No todos found</p>}
+        {filteredTodos.map((todo) => (
+          <li key={todo.id}>
+            <button
+              data-testid={`todo-${todo.id}`}
+              onClick={() => onSelectTodo(todo.id)}
+              style={{
+                cursor: 'pointer',
+                textDecoration: todo.completed ? 'line-through' : 'none',
+                marginBottom: '4px',
+                background: 'none',
+                border: 'none',
+                padding: 0,
+                font: 'inherit',
+                textAlign: 'left',
+                color: 'black',
+              }}
+            >
+              {todo.title}
+            </button>
           </li>
         ))}
       </ul>
